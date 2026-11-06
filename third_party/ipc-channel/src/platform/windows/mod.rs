@@ -6,8 +6,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// Local change to ipc-channel 0.23.0, Copyright 2026 Open Letter, Inc., SPDX-License-Identifier: LicenseRef-OpenLetter-Tools: `OsIpcReceiverSet::drop` on Windows dequeues one completion per reader before releasing any reader (test `receiver_set_drop_with_completed_and_outstanding_reads`). The rest of this file keeps the MIT/Apache terms above.
 use crate::ipc::IpcMessage;
 use postcard;
 use serde_core;
@@ -1533,6 +1531,10 @@ impl Drop for OsIpcReceiverSet {
         // We need to cancel any in-flight read operations before we drop the receivers,
         // since otherwise the receivers' `Drop` implementation would try to cancel them --
         // but the implementation there doesn't work for receivers in a set...
+        // SPDX-SnippetBegin
+        // SPDX-SnippetCopyrightText: 2026 Open Letter, Inc.
+        // SPDX-License-Identifier: LicenseRef-OpenLetter-Tools
+        // SPDX-SnippetComment: local change to `OsIpcReceiverSet::drop`: one completion is dequeued per reader before any reader is released
         //
         // Every reader in the set has a read in flight from our point of view, and
         // each one will deliver exactly one completion packet to the port: either the
@@ -1561,6 +1563,7 @@ impl Drop for OsIpcReceiverSet {
         // Wait for one completion per reader, in whatever order the port delivers them;
         // `fetch_iocp_result()` removes each reader from the set as its packet arrives,
         // and `notify_completion()` frees the associated async data.
+        // SPDX-SnippetEnd
         self.readers.retain(|r| r.r#async.is_some());
         while !self.readers.is_empty() {
             // We unwrap the outer result (can't deal with the IOCP call failing here),

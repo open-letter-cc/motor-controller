@@ -6,8 +6,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// Local change to ipc-channel 0.23.0, Copyright 2026 Open Letter, Inc., SPDX-License-Identifier: LicenseRef-OpenLetter-Tools: `OsIpcReceiverSet::drop` on Windows dequeues one completion per reader before releasing any reader (test `receiver_set_drop_with_completed_and_outstanding_reads`). The rest of this file keeps the MIT/Apache terms above.
 
 use crate::platform::OsIpcSharedMemory;
 use crate::platform::{self, OsIpcChannel, OsIpcReceiverSet};
@@ -496,6 +494,10 @@ fn receiver_set_eintr() {
     child_pid.wait();
 }
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 Open Letter, Inc.
+// SPDX-License-Identifier: LicenseRef-OpenLetter-Tools
+// SPDX-SnippetComment: local regression test for the Windows receiver-set drop order
 /// Dropping a set in which one reader's read has completed but its completion has
 /// not been dequeued, while another reader's read is still outstanding.
 ///
@@ -520,6 +522,7 @@ fn receiver_set_drop_with_completed_and_outstanding_reads() {
 
     drop(rx_set);
 }
+// SPDX-SnippetEnd
 
 #[test]
 fn receiver_set_empty() {

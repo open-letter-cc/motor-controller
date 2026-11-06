@@ -1,0 +1,78 @@
+# Copyright 2026 Open Letter, Inc.
+# SPDX-License-Identifier: LicenseRef-OpenLetter-Tools
+
+[package]
+name = "motor-controller"
+version = "0.1.0"
+# Not for crates.io: it is the seam this fork carries, and it path-depends on the
+# engine in this tree. Stated so that the `servo` dependency below can omit a
+# version requirement, which is the only thing publishing would need it for.
+publish = false
+edition = "2021"
+license = "LicenseRef-OpenLetter-Tools"
+description = "Engine-agnostic WebView abstraction seam for embedding a Servo backend (named for Servo's own motor metaphor). Reusable wrapper that keeps engine-embedding concerns out of an embedder's application crates."
+
+[features]
+# StubWebView-only. Keeps `cargo check --workspace` green without LLVM, a
+# SpiderMonkey build, so the baseline stays
+# buildable for contributors who are not touching the renderer.
+default = []
+# Pulls in real libservo and compiles ServoWebView. Everything this enables is
+# behind `#[cfg(feature = "servo-backend")]` in src/ - nothing outside this
+# crate changes shape when it is toggled.
+servo-backend = ["dep:servo"]
+
+[dependencies]
+# Real libservo, from this fork's own components/servo.
+#
+# WHY `path` AND NOT `git`: `servo = { git = "https://github.com/servo/servo" }`
+# does not resolve at any tag. components/servo is not an *explicit* member of
+# upstream's workspace - it is an implicit one, pulled in only because
+# ports/servoshell path-depends on it. Cargo's git source enumerates declared
+# members, so it never sees it; a path dependency resolves implicit members
+# fine. That asymmetry, not the tag, is the whole reason this stays a path dep.
+#
+# `optional` + `default-features = false`: libservo's defaults are
+# ["bundled", "clipboard", "js_jit", "multiprocess"]. Note that turning
+# everything off does NOT avoid SpiderMonkey - `script` is a non-optional
+# dependency of components/servo, so mozjs is required at every feature
+# combination. There is no SpiderMonkey-free libservo.
+# NO `version`: this is a path dependency on the engine in this same tree, and a
+# version requirement here only has to agree with whatever upstream's workspace
+# version happens to be. It was pinned to 0.6.0 and broke the moment an upstream
+# merge moved the workspace to 0.7.0 — this crate is its own workspace, so no
+# merge updates it, and the failure surfaces in CI rather than in the merge. The
+# path is the dependency; the number was never load-bearing. `publish = false`
+# above is what makes omitting it legal.
+#
+# The feature list is the one the capi crates ask of libservo, so this seam
+# links the engine configuration the payload ships, not a private one:
+#
+# `js_jit`: without it mozjs resolves without its `jit` feature, and there is no
+# prebuilt SpiderMonkey for that configuration, so the engine is built from
+# source on every run - twenty minutes, a full Mozilla build toolchain and a
+# bindgen pass over SpiderMonkey's headers that needs libclang 16 or newer,
+# which the oldest supported Linux runner does not have. With it, mozjs
+# downloads the same prebuilt archive the payload build uses.
+#
+# `bundled_freetype`: without it the FreeType font arm links the system
+# library, and the oldest supported Linux runner's FreeType is older than
+# freetype-sys accepts.
+#
+# `baked-in-resources`: what the payload is built with; kept in step so the
+# seam and the capi crates resolve one libservo feature set.
+servo = { path = "../../components/servo", optional = true, default-features = false, features = ["js_jit", "baked-in-resources", "bundled_freetype"] }
+
+# The engine's own workspace patches ipc-channel with a Windows teardown fix
+# (see the root Cargo.toml). This workspace resolves on its own, so it needs the
+# same entry to link the same IPC, and to drop it at the same time.
+[patch.crates-io]
+# ipc-channel 0.23.0 vendored under third_party/, MIT/Apache with upstream notices
+# kept, plus one Windows change named by a notice line in the two touched files.
+ipc-channel = { path = "third_party/ipc-channel" }
+
+# This package plus the vendored crate form one workspace, so the crate's own
+# tests, the Windows teardown regression test among them, run from here:
+# `cargo test -p ipc-channel --lib receiver_set`.
+[workspace]
+members = ["third_party/ipc-channel"]
